@@ -10,10 +10,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import db.DataBase;
+import util.HttpRequestUtils;
 
 public class Controller {
 	private static final Logger log = LoggerFactory.getLogger(Controller.class);
 	private static final String dirPath = "./webapp";
+	private static final String siteRootUrl = "http://localhost:8080";
 
 	private Request req;
 	private Response res;
@@ -31,41 +33,104 @@ public class Controller {
 	public void makeResponseFromRequest() {
 		if (req.getRequestPath() == null) {
 			log.debug("requestPath is null!");
-			res.response404();
+			res.response404NotFound();
 			return;
 		}
 
-		// url이 static file로 존재하는 경우
-		if (staticFile.exists() && !staticFile.isDirectory()) {
-			String contentType = getContentType(getExtensionFromFile(staticFile.getName()));
-			byte[] body = readFileFromPath(staticFile.toPath());
-			log.debug("content-type: " + contentType);
-			res.response200Header(contentType, body.length);
-			res.responseBody(body);
-			return;
-		}
-		log.debug("not a static file!");
-
-		// static file이 아닌 경우
 		switch (req.getRequestPath()) {
-		case "/":
+		// 루트 페이지
+		case "/": {
 			setStaticFile("/index.html");
 			byte[] body = readFileFromPath(staticFile.toPath());
 			res.response200Header("text/html", body.length);
 			res.responseBody(body);
-			break;
+			return;
+		}
 
-		case "/user/create":
-			Map<String, String> userParam = req.getParams();
-			User user = new User(userParam.get("userId"), userParam.get("password"), userParam.get("name"),
-					userParam.get("email"));
-			DataBase.addUser(user);
-			res.responseRedirect("www.google.com");
+		// 회원가입
+		case "/user/create": {
+			Map<String, String> userParam = req.getFormRequestParamsFromBody();
 
-			break;
+			// map.get("key")는 해당 키 없으면 null 리턴함
+			String userId = userParam.get("userId");
+			String password = userParam.get("password");
+			String name = userParam.get("name");
+			String email = userParam.get("email");
 
-		default:
-			res.response404();
+			// 필요한 parameter 다 있는지 검증, 없으면 400번 응답
+			if (userId != null && password != null && name != null && email != null) {
+				User user = new User(userParam.get("userId"), userParam.get("password"), userParam.get("name"),
+						userParam.get("email"));
+				DataBase.addUser(user);
+				DataBase.findAll().forEach(u -> {
+					log.debug("database content: {}", u);
+				});
+				res.response302Redirect(siteRootUrl + "/index.html");
+				return;
+			}
+
+			// 원래는 400 코드 대신 다 채우라고 경고해주는 회원가입 페이지로 리다이렉해줘야 한다
+			res.response400WrongRequest();
+			return;
+		}
+
+		// 로그인
+		case "/user/login": {
+			Map<String, String> userParam = req.getFormRequestParamsFromBody();
+
+			// map.get("key")는 해당 키 없으면 null 리턴함
+			String userId = userParam.get("userId");
+			String password = userParam.get("password");
+
+			User user = null;
+			if (userId != null)
+				user = DataBase.findUserById(userId);
+
+			// 로그인 성공
+			// 악의적인 리퀘스트 가능성 대비한 서버 방어코드
+			if (user != null && password != null && user.getPassword().equals(password)) {
+				res.response302Redirect(siteRootUrl + "/index.html", "logined=true");
+				return;
+			}
+
+			// 로그인 실패
+			res.response302Redirect(siteRootUrl + "/user/login_failed.html", "logined=false");
+			return;
+		}
+
+		// 사용자 목록 출력
+		case "/user/list.html": {
+			String cookie = req.getRequestHeader().get("Cookie");
+			// 쿠키 있는지 확인
+			if (cookie != null && !cookie.trim().isEmpty()) {
+				Map<String, String> cookieMap = HttpRequestUtils.parseCookies(cookie);
+				String isLogIn = cookieMap.get("logined");
+				// logined 값이 true인지 확인
+				if (isLogIn != null && isLogIn.equals("true")) {
+					res.responseUserList();
+					return;
+				}
+			}
+
+			res.response302Redirect(siteRootUrl + "/user/login");
+			return;
+		}
+
+		default: {
+			// static 파일인 경우
+			if (staticFile.exists() && !staticFile.isDirectory()) {
+				String contentType = getContentType(getExtensionFromFile(staticFile.getName()));
+				byte[] body = readFileFromPath(staticFile.toPath());
+				log.debug("content-type: " + contentType);
+				res.response200Header(contentType, body.length);
+				res.responseBody(body);
+				return;
+			}
+
+			// 어디에도 속하지 않는 경우
+			res.response404NotFound();
+			return;
+		}
 		}
 	}
 

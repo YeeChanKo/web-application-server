@@ -4,11 +4,12 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.util.HashMap;
 import java.util.Map;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import com.google.common.collect.Maps;
 
 import util.HttpRequestUtils;
 import util.HttpRequestUtils.Pair;
@@ -19,7 +20,7 @@ public class Request {
 
 	private String httpMethod;
 	private String requestPath;
-	private Map<String, String> params;
+	private Map<String, String> requestParams;
 	private String requestProtocol;
 	private Map<String, String> requestHeader;
 	private String requestBody;
@@ -35,7 +36,7 @@ public class Request {
 			}
 			splitRequestLine(requestLine);
 
-			requestHeader = new HashMap<String, String>();
+			requestHeader = Maps.newHashMap();
 			String temp = "";
 			Pair header = null;
 			temp = br.readLine();
@@ -49,21 +50,11 @@ public class Request {
 			String contentLength = requestHeader.get("Content-Length");
 			if (contentLength != null && !contentLength.isEmpty())
 				requestBody = IOUtils.readData(br, Integer.parseInt(contentLength));
+			log.debug("request body: {}", requestBody);
 
 		} catch (IOException e) {
 			log.error(e.getMessage());
 		}
-	}
-
-	public Request(String httpMethod, String requestPath, Map<String, String> params, String requestProtocol,
-			Map<String, String> requestHeader, String requestBody) {
-		super();
-		this.httpMethod = httpMethod;
-		this.requestPath = requestPath;
-		this.params = params;
-		this.requestProtocol = requestProtocol;
-		this.requestHeader = requestHeader;
-		this.requestBody = requestBody;
 	}
 
 	private void splitRequestLine(String requestLine) {
@@ -78,70 +69,8 @@ public class Request {
 			return;
 		}
 
-		params = HttpRequestUtils.parseQueryString(result[2]);
+		requestParams = HttpRequestUtils.parseQueryString(result[2]);
 		requestProtocol = result[3];
-	}
-
-	@Override
-	public int hashCode() {
-		final int prime = 31;
-		int result = 1;
-		result = prime * result + ((httpMethod == null) ? 0 : httpMethod.hashCode());
-		result = prime * result + ((params == null) ? 0 : params.hashCode());
-		result = prime * result + ((requestBody == null) ? 0 : requestBody.hashCode());
-		result = prime * result + ((requestHeader == null) ? 0 : requestHeader.hashCode());
-		result = prime * result + ((requestPath == null) ? 0 : requestPath.hashCode());
-		result = prime * result + ((requestProtocol == null) ? 0 : requestProtocol.hashCode());
-		return result;
-	}
-
-	@Override
-	public boolean equals(Object obj) {
-		if (this == obj)
-			return true;
-		if (obj == null)
-			return false;
-		if (getClass() != obj.getClass())
-			return false;
-		Request other = (Request) obj;
-		if (httpMethod == null) {
-			if (other.httpMethod != null)
-				return false;
-		} else if (!httpMethod.equals(other.httpMethod))
-			return false;
-		if (params == null) {
-			if (other.params != null)
-				return false;
-		} else if (!params.equals(other.params))
-			return false;
-		if (requestBody == null) {
-			if (other.requestBody != null)
-				return false;
-		} else if (!requestBody.equals(other.requestBody))
-			return false;
-		if (requestHeader == null) {
-			if (other.requestHeader != null)
-				return false;
-		} else if (!requestHeader.equals(other.requestHeader))
-			return false;
-		if (requestPath == null) {
-			if (other.requestPath != null)
-				return false;
-		} else if (!requestPath.equals(other.requestPath))
-			return false;
-		if (requestProtocol == null) {
-			if (other.requestProtocol != null)
-				return false;
-		} else if (!requestProtocol.equals(other.requestProtocol))
-			return false;
-		return true;
-	}
-
-	@Override
-	public String toString() {
-		return "Request [httpMethod=" + httpMethod + ", requestPath=" + requestPath + ", params=" + params
-				+ ", requestProtocol=" + requestProtocol + ", requestHeader=" + requestHeader + ", requestBody="
-				+ requestBody + "]";
 	}
 
 	public String getHttpMethod() {
@@ -153,11 +82,19 @@ public class Request {
 	}
 
 	public Map<String, String> getParams() {
-		return params;
+		return requestParams;
 	}
 
-	public String getRequestBody() {
-		return requestBody;
+	public Map<String, String> getRequestHeader() {
+		return requestHeader;
+	}
+
+	public String getRequestProtocol() {
+		return requestProtocol;
+	}
+
+	// 바디에 아무 내용 없으면 빈 맵 리턴, 폼에 빈값 있는 건 아예 안들어감
+	public Map<String, String> getFormRequestParamsFromBody() {
+		return HttpRequestUtils.parseQueryString(requestBody);
 	}
 }
-
