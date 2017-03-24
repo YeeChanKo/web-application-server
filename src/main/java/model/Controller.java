@@ -15,7 +15,12 @@ import util.HttpRequestUtils;
 public class Controller {
 	private static final Logger log = LoggerFactory.getLogger(Controller.class);
 	private static final String dirPath = "./webapp";
-	private static final String siteRootUrl = "http://localhost:8080";
+	private static final String siteRootUrl_production = "http://1.255.56.137:7070";
+	private static final String siteRootUrl_development = "http://localhost:8080";
+	private static final String siteRootUrl;
+	static {
+		siteRootUrl = siteRootUrl_production;
+	}
 
 	private Request req;
 	private Response res;
