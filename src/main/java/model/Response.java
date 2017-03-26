@@ -1,14 +1,11 @@
 package model;
 
 import java.io.DataOutputStream;
-import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.util.function.Consumer;
 
-import org.jsoup.Jsoup;
-import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
-import org.jsoup.parser.Parser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -93,25 +90,23 @@ public class Response {
 
 	public void responseUserList() {
 		try {
-			File file = new File(new File("").getAbsolutePath() + "/webapp/user/list.html");
-			log.debug(new File("").getAbsolutePath() + "/webapp/user/list.html");
+			HTML html = new HTML("/webapp/user/list.html");
+			Element tbody = html.select("#main tbody");
 
-			Document doc = Jsoup.parse(file, "UTF-8", "");
-			Element tbody = doc.select("#main tbody").first();
+			DataBase.findAll().forEach(new Consumer<User>() {
+				int count = 3; // 기존 stock 요소로 1,2번이 존재해서 3번부터
 
-			int count = 3;
-			for (User user : DataBase.findAll()) {
-				String str = "<tr><th scope='row'>" + count + "</th><td>" + user.getUserId() + "</td><td>"
-						+ user.getName() + "</td><td>" + user.getEmail()
-						+ "</td><td><a href='#' class='btn btn-success'role='button'>수정</a></td></tr>";
-				// <#root> 벗기기
-				Element ele = Jsoup.parse(str, "", Parser.xmlParser()).child(0);
-				tbody.appendChild(ele);
-				count++;
-			}
+				@Override
+				public void accept(User user) {
+					String element = "<tr><th scope='row'>" + count + "</th><td>" + user.getUserId() + "</td><td>"
+							+ user.getName() + "</td><td>" + user.getEmail()
+							+ "</td><td><a href='#' class='btn btn-success'role='button'>수정</a></td></tr>";
+					html.appendElementAsStringAt(element, tbody);
+					count++;
+				}
+			});
 
-			byte[] body = doc.toString().getBytes();
-
+			byte[] body = html.getHTMLAsByte();
 			response200Header("text/html", body.length);
 			responseBody(body);
 
