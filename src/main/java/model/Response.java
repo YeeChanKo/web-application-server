@@ -3,115 +3,120 @@ package model;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
-import java.util.function.Consumer;
+import java.util.Map;
 
-import org.jsoup.nodes.Element;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import db.DataBase;
+import com.google.common.collect.Maps;
 
 public class Response {
 	private static final Logger log = LoggerFactory.getLogger(Response.class);
+	private static final String httpVersion = "HTTP/1.1";
 
 	private DataOutputStream dos;
+	private Map<String, String> headers;
 
 	public Response(OutputStream out) {
 		dos = new DataOutputStream(out);
+		headers = Maps.newHashMap();
 	}
 
-	public void response200Header(String contentType, int lengthOfBodyContent) {
-		response200Header(contentType, lengthOfBodyContent, null);
-	}
-
-	public void response200Header(String contentType, int lengthOfBodyContent, String cookieContents) {
+	private void writeLineInDos(String line) {
 		try {
-			dos.writeBytes("HTTP/1.1 200 OK \r\n");
-			dos.writeBytes("Content-Type: " + contentType + ";charset=utf-8\r\n");
-			dos.writeBytes("Content-Length: " + lengthOfBodyContent + "\r\n");
-			if (cookieContents != null)
-				dos.writeBytes("Set-Cookie: " + cookieContents + "\r\n");
-			dos.writeBytes("\r\n");
+			dos.writeBytes(line + "\r\n");
 		} catch (IOException e) {
 			log.error(e.getMessage());
 		}
 	}
 
-	public void response302Redirect(String url) {
-		response302Redirect(url, null);
-	}
-
-	public void response302Redirect(String url, String cookieContents) {
-		try {
-			dos.writeBytes("HTTP/1.1 302 Found \r\n");
-			dos.writeBytes("Location: " + url + "\r\n");
-			if (cookieContents != null) {
-				dos.writeBytes("Set-Cookie: " + cookieContents + "\r\n");
-				log.debug("cookie writing: " + cookieContents);
-			}
-			dos.writeBytes("\r\n");
-			responseBody("".getBytes());
-		} catch (IOException e) {
-			log.error(e.getMessage());
-		}
-
-	}
-
-	public void responseStatusCodeAndMessage(int statusCode, String statusMsg, String bodyMsg) {
-		byte[] message = bodyMsg.getBytes();
-		try {
-			dos.writeBytes("HTTP/1.1 " + statusCode + " " + statusMsg + " \r\n");
-			dos.writeBytes("Content-Type: text/plain;charset=utf-8\r\n");
-			dos.writeBytes("Content-Length: " + message.length + "\r\n");
-			dos.writeBytes("\r\n");
-			responseBody(message);
-		} catch (IOException e) {
-			log.error(e.getMessage());
-		}
-	}
-
-	public void response404NotFound() {
-		responseStatusCodeAndMessage(404, "NOT_FOUND", "404. Page Not Found!");
-	}
-
-	public void response400WrongRequest() {
-		responseStatusCodeAndMessage(400, "WRONG_REQUEST",
-				"400. There is something wrong in your request!\n" + "Please retry.");
-	}
-
-	public void responseBody(byte[] body) {
+	private void writeBodyInDos(byte[] body) {
 		try {
 			dos.write(body, 0, body.length);
+		} catch (IOException e) {
+			log.error(e.getMessage());
+		}
+	}
+
+	private void flushDos() {
+		try {
 			dos.flush();
 		} catch (IOException e) {
 			log.error(e.getMessage());
 		}
 	}
 
-	public void responseUserList() {
-		try {
-			HTML html = new HTML("/webapp/user/list.html");
-			Element tbody = html.select("#main tbody");
+	public void writeStatusCodeAndMessage(int statusCode, String statusMsg) {
+		writeLineInDos(httpVersion + " " + statusCode + " " + statusMsg);
+	}
 
-			DataBase.findAll().forEach(new Consumer<User>() {
-				int count = 3; // 기존 stock 요소로 1,2번이 존재해서 3번부터
+	private void writeStatusCode200() {
+		writeStatusCodeAndMessage(200, "OK");
+	}
 
-				@Override
-				public void accept(User user) {
-					String element = "<tr><th scope='row'>" + count + "</th><td>" + user.getUserId() + "</td><td>"
-							+ user.getName() + "</td><td>" + user.getEmail()
-							+ "</td><td><a href='#' class='btn btn-success'role='button'>수정</a></td></tr>";
-					html.appendElementAsStringAt(element, tbody);
-					count++;
-				}
-			});
+	public void addHeader(String key, String value) {
+		headers.put(key, value);
+	}
 
-			byte[] body = html.getHTMLAsByte();
-			response200Header("text/html", body.length);
-			responseBody(body);
+	private void writeHeaderAndEmptyLine() {
+		headers.keySet().stream().forEach(key -> {
+			writeLineInDos(key + ": " + headers.get(key));
+		});
+		// 헤더 종료후 구분선 넣어줌
+		writeLineInDos("");
+	}
 
-		} catch (IOException e) {
-			log.error(e.getMessage());
-		}
+	private void addContentType(String contentType) {
+		addHeader("Content-Type", contentType + "; charset=utf-8");
+	}
+
+	private void addContentLength(int contentLength) {
+		addHeader("Content-Length", Integer.toString(contentLength));
+	}
+
+	private void addSetCookie(String cookieContents) {
+		addHeader("Set-Cookie", cookieContents);
+	}
+
+	public void redirect(String url, String cookieContents) {
+		writeStatusCodeAndMessage(302, "Found");
+		addHeader("Location", url);
+		if (cookieContents != null)
+			addSetCookie(cookieContents);
+		writeHeaderAndEmptyLine();
+		flushDos();
+	}
+
+	public void show200WithBody(String contentType, byte[] body, String cookieContents) {
+		writeStatusCode200();
+		addContentType(contentType);
+		addContentLength(body.length);
+		if (cookieContents != null)
+			addSetCookie(cookieContents);
+		writeHeaderAndEmptyLine();
+		writeBodyInDos(body);
+		flushDos();
+	}
+
+	public void showSimplePage(int statusCode, String statusMsg, byte[] message) {
+		writeStatusCodeAndMessage(statusCode, statusMsg);
+		addContentType("text/plain");
+		addContentLength(message.length);
+		writeHeaderAndEmptyLine();
+		writeBodyInDos(message);
+		flushDos();
+	}
+
+	public void show400WrongRequest() {
+		showSimplePage(400, "WRONG_REQUEST",
+				"400. There is something wrong in your request!\nPlease retry.".getBytes());
+	}
+
+	public void show404NotFound() {
+		showSimplePage(404, "NOT_FOUND", "404. Page Not Found!".getBytes());
+	}
+
+	public void forwardStaticFile(StaticFile file) {
+		show200WithBody(file.getContentType(), file.readFile(), null);
 	}
 }

@@ -29,6 +29,8 @@ public class Request {
 		try {
 			BufferedReader br = new BufferedReader(new InputStreamReader(in, "UTF-8"));
 
+			// 헤더 첫번째 줄 requestline 읽어들인다
+			// httpMethod, requestPath, requestParams 설정
 			String requestLine = br.readLine();
 			log.debug("request line: {}", requestLine);
 			if (requestLine == null) {
@@ -36,6 +38,7 @@ public class Request {
 			}
 			splitRequestLine(requestLine);
 
+			// 나머지 헤더들 맵 형식으로 읽어들인다
 			requestHeader = Maps.newHashMap();
 			String temp = "";
 			Pair header = null;
@@ -47,10 +50,11 @@ public class Request {
 				temp = br.readLine();
 			}
 
+			// 바디가 있는 경우 바디도 읽어들인다
 			String contentLength = requestHeader.get("Content-Length");
 			if (contentLength != null && !contentLength.isEmpty())
 				requestBody = IOUtils.readData(br, Integer.parseInt(contentLength));
-			log.debug("request body: {}", requestBody);
+			// log.debug("request body: {}", requestBody);
 
 		} catch (IOException e) {
 			log.error(e.getMessage());
@@ -63,7 +67,7 @@ public class Request {
 		httpMethod = result[0];
 		requestPath = result[1];
 
-		// if no param
+		// ?로 구분되는 get으로 넘겨주는 파라미터 없을 경우
 		if (result.length < 4) {
 			requestProtocol = result[2];
 			return;
@@ -81,19 +85,21 @@ public class Request {
 		return requestPath;
 	}
 
-	public Map<String, String> getParams() {
-		return requestParams;
+	public String getParamByKey(String key) {
+		return requestParams.get(key);
 	}
 
-	public Map<String, String> getRequestHeader() {
-		return requestHeader;
+	public String getHeader(String key) {
+		return requestHeader.get(key);
 	}
 
 	public String getRequestProtocol() {
 		return requestProtocol;
 	}
 
-	// 바디에 아무 내용 없으면 빈 맵 리턴, 폼에 빈값 있는 건 아예 안들어감
+	// post form request 에서 바디로 들어오는 내용 반환
+	// 바디에 아무 내용 없으면 빈 맵 리턴
+	// value가 빈 값인 경우엔 key도 아예 안들어간다
 	public Map<String, String> getFormRequestParamsFromBody() {
 		return HttpRequestUtils.parseQueryString(requestBody);
 	}

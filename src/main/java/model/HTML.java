@@ -1,21 +1,27 @@
 package model;
 
-import java.io.File;
 import java.io.IOException;
 
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.parser.Parser;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class HTML {
+	private static final Logger log = LoggerFactory.getLogger(HTML.class);
 
-	private File file;
+	private StaticFile file;
 	private Document doc;
 
-	public HTML(String path) throws IOException {
-		file = new File(new File("").getAbsolutePath() + path);
-		doc = Jsoup.parse(file, "UTF-8", "");
+	public HTML(String path) {
+		try {
+			file = new StaticFile(path);
+			doc = Jsoup.parse(file.getFile(), "UTF-8", "");
+		} catch (IOException e) {
+			log.error(e.getMessage());
+		}
 	}
 
 	public Element select(String selector) {
